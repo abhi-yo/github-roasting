@@ -1,5 +1,28 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, GenerativeModel } from "@google/generative-ai";
 import { NextResponse } from "next/server";
+
+interface GitHubProfile {
+  name?: string;
+  public_repos?: number;
+  followers?: number;
+  following?: number;
+  contributions?: {
+    lastYear?: number;
+  };
+  bio?: string;
+  location?: string;
+  company?: string;
+  hireable?: boolean;
+}
+
+interface RoastRequestBody {
+  profileData: GitHubProfile;
+  language: "english" | "hindi";
+}
+
+interface ApiError extends Error {
+  details?: unknown;
+}
 
 const apiKey = process.env.GEMINI_API_KEY || "";
 console.log(
@@ -10,7 +33,7 @@ console.log(
 const genAI = new GoogleGenerativeAI(apiKey);
 
 async function generateRoast(
-  profileData: any,
+  profileData: GitHubProfile,
   language: "english" | "hindi"
 ): Promise<string> {
   if (!profileData) {
@@ -81,22 +104,27 @@ async function generateRoast(
       } based on their SPECIFIC GitHub profile data:`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model: GenerativeModel = genAI.getGenerativeModel({
+      model: "gemini-pro",
+    });
     console.log("Sending request to Gemini API...");
     const result = await model.generateContent(prompt);
     console.log("Received response from Gemini API");
     const response = result.response;
     const text = response.text();
     return text;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Detailed Gemini API error:", JSON.stringify(error, null, 2));
-    throw new Error(`Gemini API error: ${error.message}`);
+    const apiError: ApiError = new Error("Gemini API error");
+    apiError.details = error;
+    throw apiError;
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const { profileData, language } = await request.json();
+    const { profileData, language } =
+      (await request.json()) as RoastRequestBody;
     console.log("Received profile data:", JSON.stringify(profileData, null, 2));
     console.log("Requested language:", language);
 
@@ -116,10 +144,12 @@ export async function POST(request: Request) {
 
     const roast = await generateRoast(profileData, language);
     return NextResponse.json({ roast });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error in POST handler:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
     return NextResponse.json(
-      { message: "Error generating roast", error: error.message },
+      { message: "Error generating roast", error: errorMessage },
       { status: 500 }
     );
   }
