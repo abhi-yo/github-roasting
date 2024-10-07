@@ -13,12 +13,14 @@ export default function GitHubRoaster() {
   const [error, setError] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [language, setLanguage] = useState<"english" | "hindi">("english");
+  const [userCount, setUserCount] = useState<number | null>(null);
 
   useEffect(() => {
     const userPrefersDark = window.matchMedia(
       "(prefers-color-scheme: dark)"
     ).matches;
     setDarkMode(userPrefersDark);
+    fetchUserCount();
   }, []);
 
   useEffect(() => {
@@ -29,25 +31,42 @@ export default function GitHubRoaster() {
     }
   }, [darkMode]);
 
+  const fetchUserCount = async () => {
+    try {
+      const response = await axios.get("/api/user-count");
+      setUserCount(response.data.count);
+    } catch (error) {
+      console.error("Error fetching user count:", error);
+    }
+  };
+
+  const incrementUserCount = async () => {
+    try {
+      const response = await axios.post("/api/user-count");
+      setUserCount(response.data.count);
+    } catch (error) {
+      console.error("Error incrementing user count:", error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     setRoast("");
     try {
-      // First, fetch the GitHub profile data
       const profileResponse = await axios.post("/api/github-profile", {
         username,
       });
       const profileData = profileResponse.data;
 
-      // Then, send the profile data along with the language to generate the roast
       const roastResponse = await axios.post("/api/generate-roast", {
         profileData,
         language,
       });
 
       setRoast(roastResponse.data.roast);
+      await incrementUserCount();
     } catch (error) {
       console.error("Error:", error);
       setError("An error occurred. Please check the username and try again.");
@@ -131,6 +150,15 @@ export default function GitHubRoaster() {
                 </span>
               )}
             </Button>
+            {userCount !== null && (
+              <p
+                className={`text-sm ${
+                  darkMode ? "text-gray-400" : "text-gray-600"
+                }`}
+              >
+                {userCount} GitHub profiles roasted so far!
+              </p>
+            )}
           </form>
           {error && (
             <div
@@ -164,7 +192,6 @@ export default function GitHubRoaster() {
           )}
         </div>
       </div>
-
       <div
         className={`w-full text-center py-4 text-sm ${
           darkMode ? "text-gray-400" : "text-gray-500"
